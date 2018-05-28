@@ -39,6 +39,7 @@ func NamespaceFromEnv(ctx context.Context) context.Context {
 // Namespace returns the namespace from the context.
 //
 // The namespace is not guaranteed to be valid.
+// Namespace从context中返回namespace，并且该namespace不保证正确
 func Namespace(ctx context.Context) (string, bool) {
 	namespace, ok := ctx.Value(namespaceKey{}).(string)
 	if !ok {
@@ -49,6 +50,7 @@ func Namespace(ctx context.Context) (string, bool) {
 }
 
 // NamespaceRequired returns the valid namepace from the context or an error.
+// NamespaceRequired从context中返回namespace或者error
 func NamespaceRequired(ctx context.Context) (string, error) {
 	namespace, ok := Namespace(ctx)
 	if !ok || namespace == "" {

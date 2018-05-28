@@ -18,6 +18,8 @@ type ClientOpt func(c *clientOpts) error
 //
 // Any operation that does not have a namespace set on the context will
 // be provided the default namespace
+// WithDefaultNamespace设置client默认的namespace
+// 任何context没有设置namespace的操作都将使用默认的namespace
 func WithDefaultNamespace(ns string) ClientOpt {
 	return func(c *clientOpts) error {
 		c.defaultns = ns

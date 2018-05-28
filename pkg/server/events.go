@@ -40,6 +40,8 @@ type eventMonitor struct {
 
 // Create new event monitor. New event monitor will start subscribing containerd event. All events
 // happen after it should be monitored.
+// 创建一个新的event monitor，新的event monitor会开始订阅containerd event
+// 所有在此后发生的事件都会被监听
 func newEventMonitor(c *criContainerdService) *eventMonitor {
 	ctx, cancel := context.WithCancel(context.Background())
 	ch, errCh := c.client.Subscribe(ctx)

@@ -39,10 +39,12 @@ var _ cio.IO = &ExecIO{}
 
 // NewExecIO creates exec io.
 func NewExecIO(id, root string, tty, stdin bool) (*ExecIO, error) {
+	// 创建三个fifo文件
 	fifos, err := newFifos(root, id, tty, stdin)
 	if err != nil {
 		return nil, err
 	}
+	// 创建stdio pipes
 	stdio, closer, err := newStdioPipes(fifos)
 	if err != nil {
 		return nil, err
@@ -98,6 +100,7 @@ func (e *ExecIO) Attach(opts AttachOptions) <-chan struct{} {
 		if _, err := io.Copy(stream, out); err != nil {
 			glog.Errorf("Failed to pipe %q for container exec %q: %v", t, e.id, err)
 		}
+		// 关闭out和stream
 		out.Close()
 		stream.Close()
 		if stdinStreamRC != nil {
@@ -111,19 +114,24 @@ func (e *ExecIO) Attach(opts AttachOptions) <-chan struct{} {
 	if opts.Stdout != nil {
 		wg.Add(1)
 		// Closer should wait for this routine to be over.
+		// Closer需要等待本routine结束
 		e.closer.wg.Add(1)
+		// 从e.stdout读取到opts.Stdout
 		go attachOutput(Stdout, opts.Stdout, e.stdout)
 	}
 
+	// 当没有指定tty且opts.Stderr不为空，则将stderr输出到opts.Stderr
 	if !opts.Tty && opts.Stderr != nil {
 		wg.Add(1)
 		// Closer should wait for this routine to be over.
 		e.closer.wg.Add(1)
+		// 从e.stderr读取到opts.Stderr
 		go attachOutput(Stderr, opts.Stderr, e.stderr)
 	}
 
 	done := make(chan struct{})
 	go func() {
+		// 等待stdout和stderr都结束
 		wg.Wait()
 		close(done)
 	}()
@@ -136,6 +144,7 @@ func (e *ExecIO) Cancel() {
 }
 
 // Wait waits exec io to finish.
+// Wait等待exec io结束
 func (e *ExecIO) Wait() {
 	e.closer.Wait()
 }
@@ -145,6 +154,7 @@ func (e *ExecIO) Close() error {
 	if e.closer != nil {
 		e.closer.Close()
 	}
+	// 删除所有的fifo文件
 	if e.fifos != nil {
 		return os.RemoveAll(e.fifos.Dir)
 	}

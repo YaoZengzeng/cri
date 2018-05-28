@@ -60,6 +60,7 @@ type CRIContainerdService interface {
 	Stop()
 	runtime.RuntimeServiceServer
 	runtime.ImageServiceServer
+	// CRIContainerdServiceServer仅仅包含LoadImage这一接口
 	api.CRIContainerdServiceServer
 }
 
@@ -134,13 +135,16 @@ func NewCRIContainerdService(config options.Config) (CRIContainerdService, error
 		client:             client,
 	}
 
+	// imageFSPath为"/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs"
 	imageFSPath := imageFSPath(config.ContainerdConfig.RootDir, config.ContainerdConfig.Snapshotter)
+	// getDeviceUUID获取给定路径的device uuid
 	c.imageFSUUID, err = c.getDeviceUUID(imageFSPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get imagefs uuid of %q: %v", imageFSPath, err)
 	}
 	glog.V(2).Infof("Get device uuid %q for image filesystem %q", c.imageFSUUID, imageFSPath)
 
+	// 创建CNI netPlugin
 	c.netPlugin, err = ocicni.InitCNI(config.NetworkPluginConfDir, config.NetworkPluginBinDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize cni plugin: %v", err)
@@ -155,6 +159,7 @@ func NewCRIContainerdService(config options.Config) (CRIContainerdService, error
 	c.eventMonitor = newEventMonitor(c)
 
 	// Create the grpc server and register runtime and image services.
+	// 创建grpc server并且将runtime services和image service注册其中
 	c.server = grpc.NewServer()
 	instrumented := newInstrumentedService(c)
 	runtime.RegisterRuntimeServiceServer(c.server, instrumented)
@@ -169,15 +174,18 @@ func (c *criContainerdService) Run() error {
 	glog.V(2).Info("Start cri-containerd service")
 
 	glog.V(2).Infof("Start recovering state")
+	// 对之前的状态进行恢复
 	if err := c.recover(context.Background()); err != nil {
 		return fmt.Errorf("failed to recover state: %v", err)
 	}
 
 	// Start event handler.
 	glog.V(2).Info("Start event monitor")
+	// 启动event handler
 	eventMonitorCloseCh := c.eventMonitor.start()
 
 	// Start snapshot stats syncer, it doesn't need to be stopped.
+	// 启动snapshot stats syncer，它不需要停止
 	glog.V(2).Info("Start snapshots syncer")
 	snapshotsSyncer := newSnapshotsSyncer(
 		c.snapshotStore,
@@ -187,6 +195,7 @@ func (c *criContainerdService) Run() error {
 	snapshotsSyncer.start()
 
 	// Start streaming server.
+	// 启动streaming server
 	glog.V(2).Info("Start streaming server")
 	streamServerCloseCh := make(chan struct{})
 	go func() {
@@ -198,6 +207,7 @@ func (c *criContainerdService) Run() error {
 
 	// Start grpc server.
 	// Unlink to cleanup the previous socket file.
+	// 启动grpc server，调用Unlink函数清除之前的socket file
 	glog.V(2).Info("Start grpc server")
 	err := syscall.Unlink(c.config.SocketPath)
 	if err != nil && !os.IsNotExist(err) {
@@ -216,6 +226,7 @@ func (c *criContainerdService) Run() error {
 	}()
 
 	// Stop the whole cri-containerd service if any of the critical service exits.
+	// 如果其中任何一个重要服务停止了，关闭整个cri-containerd service
 	select {
 	case <-eventMonitorCloseCh:
 	case <-streamServerCloseCh:
@@ -235,6 +246,7 @@ func (c *criContainerdService) Run() error {
 // Stop stops the cri-containerd service.
 func (c *criContainerdService) Stop() {
 	glog.V(2).Info("Stop cri-containerd service")
+	// 关闭eventMonitor，streamServer以及grpc Server
 	c.eventMonitor.stop()
 	c.streamServer.Stop() // nolint: errcheck
 	c.server.Stop()

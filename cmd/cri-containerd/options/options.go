@@ -79,6 +79,7 @@ type Config struct {
 	// StreamServerPort is the port streaming server is listening on.
 	StreamServerPort string `toml:"stream_server_port" json:"streamServerPort,omitempty"`
 	// CgroupPath is the path for the cgroup that cri-containerd is placed in.
+	// CgroupPath是cri-containerd所在的cgroup的路径
 	CgroupPath string `toml:"cgroup_path" json:"cgroupPath,omitempty"`
 	// EnableSelinux indicates to enable the selinux support.
 	EnableSelinux bool `toml:"enable_selinux" json:"enableSelinux,omitempty"`
@@ -87,6 +88,7 @@ type Config struct {
 	// StatsCollectPeriod is the period (in seconds) of snapshots stats collection.
 	StatsCollectPeriod int `toml:"stats_collect_period" json:"statsCollectPeriod,omitempty"`
 	// SystemdCgroup enables systemd cgroup support.
+	// SystemdCgroup使能systemd cgroup支持
 	SystemdCgroup bool `toml:"systemd_cgroup" json:"systemdCgroup,omitempty"`
 	// OOMScore adjust the cri-containerd's oom score
 	OOMScore int `toml:"oom_score" json:"oomScore,omitempty"`
@@ -113,6 +115,7 @@ func NewCRIContainerdOptions() *CRIContainerdOptions {
 
 // AddFlags adds cri-containerd command line options to pflag.
 func (c *CRIContainerdOptions) AddFlags(fs *pflag.FlagSet) {
+	// 设置default config
 	defaults := defaultConfig()
 	fs.StringVar(&c.ConfigFilePath, configFilePathArgName,
 		defaultConfigFilePath, "Path to the config file.")
@@ -205,8 +208,10 @@ func defaultConfig() Config {
 	return Config{
 		ContainerdConfig: ContainerdConfig{
 			RootDir:       "/var/lib/containerd",
+			// DefaultSnapshotter为overlayfs
 			Snapshotter:   containerd.DefaultSnapshotter,
 			Endpoint:      "/run/containerd/containerd.sock",
+			// 将containerd的Runtime设置为"io.containerd.runtime.v1.linux"
 			Runtime:       "io.containerd.runtime.v1.linux",
 			RuntimeEngine: "",
 			RuntimeRoot:   "",
@@ -223,6 +228,7 @@ func defaultConfig() Config {
 		EnableSelinux:       false,
 		SandboxImage:        "gcr.io/google_containers/pause:3.0",
 		StatsCollectPeriod:  10,
+		// 默认的systemd cgroup为false
 		SystemdCgroup:       false,
 		OOMScore:            -999,
 		EnableProfiling:     true,

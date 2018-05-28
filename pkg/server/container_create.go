@@ -84,11 +84,13 @@ func (c *criContainerdService) CreateContainer(ctx context.Context, r *runtime.C
 	if err != nil {
 		return nil, fmt.Errorf("failed to get sandbox container task: %v", err)
 	}
+	// 获取sandbox容器的pid
 	sandboxPid := s.Pid()
 
 	// Generate unique id and name for the container and reserve the name.
 	// Reserve the container name to avoid concurrent `CreateContainer` request creating
 	// the same container.
+	// Reserve the container name从而避免对同一个容器并行调用`CreateContainer`
 	id := util.GenerateID()
 	name := makeContainerName(config.GetMetadata(), sandboxConfig.GetMetadata())
 	glog.V(4).Infof("Generated id %q for container %q", id, name)
@@ -122,6 +124,7 @@ func (c *criContainerdService) CreateContainer(ctx context.Context, r *runtime.C
 	}
 
 	// Create container root directory.
+	// 创建容器根目录
 	containerRootDir := getContainerRootDir(c.config.RootDir, id)
 	if err = c.os.MkdirAll(containerRootDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create container root directory %q: %v",
@@ -139,9 +142,11 @@ func (c *criContainerdService) CreateContainer(ctx context.Context, r *runtime.C
 
 	// Create container volumes mounts.
 	// TODO(random-liu): Add cri-containerd integration test for image volume.
+	// 加载image里的volume mounts
 	volumeMounts := c.generateVolumeMounts(containerRootDir, config.GetMounts(), &image.ImageSpec.Config)
 
 	// Generate container runtime spec.
+	// 创建目的路径为/dev/shm, /etc/hosts，以及/etc/resolv.conf的mounts
 	mounts := c.generateContainerMounts(getSandboxRootDir(c.config.RootDir, sandboxID), config)
 
 	spec, err := c.generateContainerSpec(id, sandboxPid, config, sandboxConfig, &image.ImageSpec.Config, append(mounts, volumeMounts...))
@@ -158,6 +163,9 @@ func (c *criContainerdService) CreateContainer(ctx context.Context, r *runtime.C
 		// the runtime (runc) a chance to modify (e.g. to create mount
 		// points corresponding to spec.Mounts) before making the
 		// rootfs readonly (requested by spec.Root.Readonly).
+		// 准备容器的rootfs，它总是可写的，即使容器想要一个readonly rootfs
+		// 因为我们想让运行时有机会在将rootfs变为只读之前进行修改（例如，根据spec.Mounts
+		// 创建mount points）
 		customopts.WithNewSnapshot(id, image.Image),
 	}
 
@@ -172,6 +180,7 @@ func (c *criContainerdService) CreateContainer(ctx context.Context, r *runtime.C
 
 	// Get container log path.
 	if config.GetLogPath() != "" {
+		// 创建容器的log path
 		meta.LogPath = filepath.Join(sandbox.Config.GetLogDirectory(), config.GetLogPath())
 	}
 
@@ -232,8 +241,10 @@ func (c *criContainerdService) CreateContainer(ctx context.Context, r *runtime.C
 				RuntimeRoot:   c.config.ContainerdConfig.RuntimeRoot,
 				SystemdCgroup: c.config.SystemdCgroup}), // TODO (mikebrow): add CriuPath when we add support for pause
 		containerd.WithContainerLabels(containerLabels),
+		// 将容器的meta写入
 		containerd.WithContainerExtension(containerMetadataExtension, &meta))
 	var cntr containerd.Container
+	// 调用containerd client创建一个新的container
 	if cntr, err = c.client.NewContainer(ctx, id, opts...); err != nil {
 		return nil, fmt.Errorf("failed to create containerd container: %v", err)
 	}
@@ -269,6 +280,8 @@ func (c *criContainerdService) CreateContainer(ctx context.Context, r *runtime.C
 		return nil, fmt.Errorf("failed to add container %q into store: %v", id, err)
 	}
 
+	// CreateContainer调用containerd client创建container，并且存储元数据
+	// 但是并不会创建以及启动task
 	return &runtime.CreateContainerResponse{ContainerId: id}, nil
 }
 
@@ -372,6 +385,7 @@ func (c *criContainerdService) generateContainerSpec(id string, sandboxPid uint3
 // generateVolumeMounts sets up image volumes for container. Rely on the removal of container
 // root directory to do cleanup. Note that image volume will be skipped, if there is criMounts
 // specified with the same destination.
+// 如果criMounts中和image volume中有同样的目的地址，image volume就会被跳过
 func (c *criContainerdService) generateVolumeMounts(containerRootDir string, criMounts []*runtime.Mount, config *imagespec.ImageConfig) []*runtime.Mount {
 	if len(config.Volumes) == 0 {
 		return nil
@@ -383,6 +397,7 @@ func (c *criContainerdService) generateVolumeMounts(containerRootDir string, cri
 			// TODO(random-liu): This should be handled by Kubelet in the future.
 			// Kubelet should decide what to use for image volume, and also de-duplicate
 			// the image volume and user mounts.
+			// 以后应该由Kubelet来决定如何使用image volume，以及对image volume和user mounts进行去重
 			continue
 		}
 		volumeID := util.GenerateID()
@@ -400,6 +415,7 @@ func (c *criContainerdService) generateVolumeMounts(containerRootDir string, cri
 
 // generateContainerMounts sets up necessary container mounts including /dev/shm, /etc/hosts
 // and /etc/resolv.conf.
+// 挂载/dev/shm, /etc/hosts，以及/etc/resolv.conf目录
 func (c *criContainerdService) generateContainerMounts(sandboxRootDir string, config *runtime.ContainerConfig) []*runtime.Mount {
 	var mounts []*runtime.Mount
 	securityContext := config.GetLinux().GetSecurityContext()
@@ -721,6 +737,7 @@ func setOCINamespaces(g *generate.Generator, namespaces *runtime.NamespaceOption
 }
 
 // defaultRuntimeSpec returns a default runtime spec used in cri-containerd.
+// defaultRuntimeSpec返回cri-containerd使用的默认的runtime spec
 func defaultRuntimeSpec(id string) (*runtimespec.Spec, error) {
 	// GenerateSpec needs namespace.
 	ctx := namespaces.WithNamespace(context.Background(), k8sContainerdNamespace)
@@ -730,6 +747,7 @@ func defaultRuntimeSpec(id string) (*runtimespec.Spec, error) {
 	}
 
 	// Remove `/run` mount
+	// 移除mount中的`/run`
 	// TODO(random-liu): Mount tmpfs for /run and handle copy-up.
 	var mounts []runtimespec.Mount
 	for _, mount := range spec.Mounts {
@@ -741,6 +759,7 @@ func defaultRuntimeSpec(id string) (*runtimespec.Spec, error) {
 	spec.Mounts = mounts
 
 	// Make sure no default seccomp/apparmor is specified
+	// 确保没有指定默认的seccomp以及apparmor
 	if spec.Process != nil {
 		spec.Process.ApparmorProfile = ""
 	}

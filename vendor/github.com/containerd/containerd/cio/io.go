@@ -21,18 +21,24 @@ type Config struct {
 }
 
 // IO holds the io information for a task or process
+// IO维护了一个task或者一个process的io信息
 type IO interface {
 	// Config returns the IO configuration.
+	// Config返回IO的配置信息
 	Config() Config
 	// Cancel aborts all current io operations
+	// Cancel退出当前所有的io操作
 	Cancel()
 	// Wait blocks until all io copy operations have completed
+	// Wait会阻塞，直到所有的io拷贝操作都结束
 	Wait()
 	// Close cleans up all open io resources
+	// Close清除所有open io resources
 	Close() error
 }
 
 // cio is a basic container IO implementation.
+// cio是基础的container IO的实现
 type cio struct {
 	config Config
 
@@ -43,6 +49,7 @@ func (c *cio) Config() Config {
 	return c.config
 }
 
+// 当c.closer为空，则Cancel(), Wait()以及Close()函数都直接返回
 func (c *cio) Cancel() {
 	if c.closer == nil {
 		return
@@ -151,6 +158,7 @@ func StdioTerminal(id string) (IO, error) {
 }
 
 // NullIO redirects the container's IO into /dev/null
+// NullIO将容器的IO重定向到/dev/null
 func NullIO(id string) (IO, error) {
 	return &cio{}, nil
 }

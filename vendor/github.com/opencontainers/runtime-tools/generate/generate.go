@@ -387,6 +387,7 @@ func (g *Generator) SetProcessApparmorProfile(prof string) {
 // SetProcessArgs sets g.spec.Process.Args.
 func (g *Generator) SetProcessArgs(args []string) {
 	g.initSpecProcess()
+	// 设置process.Args
 	g.spec.Process.Args = args
 }
 

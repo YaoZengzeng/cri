@@ -38,6 +38,7 @@ type AttachOptions struct {
 	Tty       bool
 	StdinOnce bool
 	// CloseStdin is the function to close container stdin.
+	// CloseStdin是用来关闭容器的stdin的
 	CloseStdin func() error
 }
 
@@ -61,16 +62,19 @@ type wgCloser struct {
 }
 
 func (g *wgCloser) Wait() {
+	// Wait()等待wgCloser结束
 	g.wg.Wait()
 }
 
 func (g *wgCloser) Close() {
+	// 逐个关闭io.Closer
 	for _, f := range g.set {
 		f.Close()
 	}
 }
 
 func (g *wgCloser) Cancel() {
+	// cancel context
 	g.cancel()
 }
 
@@ -113,9 +117,11 @@ func newStdioPipes(fifos *cio.FIFOSet) (_ *stdioPipes, _ *wgCloser, err error) {
 	)
 	defer func() {
 		if err != nil {
+			// 如果创建pipe的过程中遇到错误，则依次关闭set中所有的closer
 			for _, f := range set {
 				f.Close()
 			}
+			// 并且调用cancel()函数
 			cancel()
 		}
 	}()
@@ -128,6 +134,7 @@ func newStdioPipes(fifos *cio.FIFOSet) (_ *stdioPipes, _ *wgCloser, err error) {
 		set = append(set, f)
 	}
 
+	// stdout fifo文件的模式为只读，不存在则创建，以及非阻塞
 	if f, err = fifo.OpenFifo(ctx, fifos.Out, syscall.O_RDONLY|syscall.O_CREAT|syscall.O_NONBLOCK, 0700); err != nil {
 		return nil, nil, err
 	}
@@ -138,6 +145,7 @@ func newStdioPipes(fifos *cio.FIFOSet) (_ *stdioPipes, _ *wgCloser, err error) {
 		return nil, nil, err
 	}
 	p.stderr = f
+	// 将fifo都加入closer中
 	set = append(set, f)
 
 	return p, &wgCloser{

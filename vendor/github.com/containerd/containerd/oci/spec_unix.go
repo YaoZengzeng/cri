@@ -61,6 +61,7 @@ func defaultNamespaces() []specs.LinuxNamespace {
 }
 
 func createDefaultSpec(ctx context.Context, id string) (*specs.Spec, error) {
+	// 先对context中的namespace进行检测
 	ns, err := namespaces.NamespaceRequired(ctx)
 	if err != nil {
 		return nil, err
@@ -153,6 +154,7 @@ func createDefaultSpec(ctx context.Context, id string) (*specs.Spec, error) {
 				"/proc/sys",
 				"/proc/sysrq-trigger",
 			},
+			// 将CgroupsPath设置为"/k8s.io/container-id"
 			CgroupsPath: filepath.Join("/", ns, id),
 			Resources: &specs.LinuxResources{
 				Devices: []specs.LinuxDeviceCgroup{

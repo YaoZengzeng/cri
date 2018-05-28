@@ -43,6 +43,8 @@ func (c *criContainerdService) StartContainer(ctx context.Context, r *runtime.St
 	if err := container.Status.UpdateSync(func(status containerstore.Status) (containerstore.Status, error) {
 		// Always apply status change no matter startContainer fails or not. Because startContainer
 		// may change container state no matter it fails or succeeds.
+		// 无论startContainer成功还是失败，总是更新status
+		// 因为startContainer不论成功或失败都可能改变容器状态
 		startErr = c.startContainer(ctx, container, &status)
 		return status, nil
 	}); startErr != nil {
@@ -90,6 +92,7 @@ func (c *criContainerdService) startContainer(ctx context.Context,
 	}
 	sandboxID := meta.SandboxID
 	// Make sure sandbox is running.
+	// 检查sandbox是否处于running状态
 	s, err := sandbox.Container.Task(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to get sandbox container %q info: %v", sandboxID, err)
@@ -104,6 +107,7 @@ func (c *criContainerdService) startContainer(ctx context.Context,
 		return fmt.Errorf("sandbox container %q is not running", sandboxID)
 	}
 
+	// ioCreation返回containerd的cio要求的IO接口
 	ioCreation := func(id string) (_ containerdio.IO, err error) {
 		stdoutWC, stderrWC, err := createContainerLoggers(meta.LogPath, config.GetTty())
 		if err != nil {
@@ -119,13 +123,17 @@ func (c *criContainerdService) startContainer(ctx context.Context,
 				}
 			}
 		}()
+		// 在容器的IO中，加入logger
 		if err := cio.WithOutput("log", stdoutWC, stderrWC)(cntr.IO); err != nil {
 			return nil, fmt.Errorf("failed to add container log: %v", err)
 		}
+		// 建立IO中的stdout和stderr这两个pipe和stdoutGroup和stderrGroup之间
+		// 数据流的拷贝
 		cntr.IO.Pipe()
 		return cntr.IO, nil
 	}
 
+	// 创建新的task
 	task, err := container.NewTask(ctx, ioCreation)
 	if err != nil {
 		return fmt.Errorf("failed to create containerd task: %v", err)
@@ -150,9 +158,11 @@ func (c *criContainerdService) startContainer(ctx context.Context,
 }
 
 // Create container loggers and return write closer for stdout and stderr.
+// 创建container的logger并且返回stdout和stderr的writeCloser
 func createContainerLoggers(logPath string, tty bool) (stdout io.WriteCloser, stderr io.WriteCloser, err error) {
 	if logPath != "" {
 		// Only generate container log when log path is specified.
+		// 只有在指定log path的时候，创建container log
 		if stdout, err = cio.NewCRILogger(logPath, cio.Stdout); err != nil {
 			return nil, nil, fmt.Errorf("failed to start container stdout logger: %v", err)
 		}
@@ -168,6 +178,7 @@ func createContainerLoggers(logPath string, tty bool) (stdout io.WriteCloser, st
 			}
 		}
 	} else {
+		// 如果没有指定log path，则创建DiscardLogger，它会丢弃所有的输入
 		stdout = cio.NewDiscardLogger()
 		stderr = cio.NewDiscardLogger()
 	}

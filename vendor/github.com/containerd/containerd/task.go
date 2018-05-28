@@ -281,6 +281,7 @@ func (t *task) Exec(ctx context.Context, id string, spec *specs.Process, ioCreat
 	if id == "" {
 		return nil, errors.Wrapf(errdefs.ErrInvalidArgument, "exec id must not be empty")
 	}
+	// 创建IO
 	i, err := ioCreate(id)
 	if err != nil {
 		return nil, err
@@ -300,6 +301,7 @@ func (t *task) Exec(ctx context.Context, id string, spec *specs.Process, ioCreat
 		ContainerID: t.id,
 		ExecID:      id,
 		Terminal:    cfg.Terminal,
+		// Stdin, Stdout, Stderr都是路径信息
 		Stdin:       cfg.Stdin,
 		Stdout:      cfg.Stdout,
 		Stderr:      cfg.Stderr,

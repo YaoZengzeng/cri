@@ -150,6 +150,7 @@ func (c *Client) NewContainer(ctx context.Context, id string, opts ...NewContain
 			return nil, err
 		}
 	}
+	// 调用containerd的container server创建容器
 	r, err := c.ContainerService().Create(ctx, container)
 	if err != nil {
 		return nil, err

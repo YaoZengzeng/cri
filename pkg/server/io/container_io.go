@@ -36,10 +36,13 @@ func streamKey(id, name string, stream StreamType) string {
 }
 
 // ContainerIO holds the container io.
+// ContainerIO实现了containerd的cio中定义的cio.IO
 type ContainerIO struct {
 	id string
 
+	// stdio对应的fifo文件所在路径
 	fifos *cio.FIFOSet
+	// stdio对应的ReadCloser和WriteCloser
 	*stdioPipes
 
 	stdoutGroup *cioutil.WriterGroup
@@ -51,12 +54,15 @@ type ContainerIO struct {
 var _ cio.IO = &ContainerIO{}
 
 // ContainerIOOpts sets specific information to newly created ContainerIO.
+// ContainerIOOpts对新创建的ContainerIO设置特定的信息
 type ContainerIOOpts func(*ContainerIO) error
 
 // WithOutput adds output stream to the container io.
+// WithOutput将output stream加入container io中
 func WithOutput(name string, stdout, stderr io.WriteCloser) ContainerIOOpts {
 	return func(c *ContainerIO) error {
 		if stdout != nil {
+			// 将stdout加入stdoutGroup中
 			if err := c.stdoutGroup.Add(streamKey(c.id, name, Stdout), stdout); err != nil {
 				return err
 			}
@@ -71,6 +77,7 @@ func WithOutput(name string, stdout, stderr io.WriteCloser) ContainerIOOpts {
 }
 
 // WithFIFOs specifies existing fifos for the container io.
+// WithFIFOs
 func WithFIFOs(fifos *cio.FIFOSet) ContainerIOOpts {
 	return func(c *ContainerIO) error {
 		c.fifos = fifos
@@ -79,8 +86,10 @@ func WithFIFOs(fifos *cio.FIFOSet) ContainerIOOpts {
 }
 
 // WithNewFIFOs creates new fifos for the container io.
+// WithNewFIFOs为container io创建新的fifo文件
 func WithNewFIFOs(root string, tty, stdin bool) ContainerIOOpts {
 	return func(c *ContainerIO) error {
+		// 创建容器的fifo目录"root/io"，以及三个fifo文件
 		fifos, err := newFifos(root, c.id, tty, stdin)
 		if err != nil {
 			return err
@@ -101,10 +110,12 @@ func NewContainerIO(id string, opts ...ContainerIOOpts) (_ *ContainerIO, err err
 			return nil, err
 		}
 	}
+	// cio.WithNewFIFOs已对fifo文件进行设置
 	if c.fifos == nil {
 		return nil, errors.New("fifos are not set")
 	}
 	// Create actual fifos.
+	// 用fifos文件创建stdio流
 	stdio, closer, err := newStdioPipes(c.fifos)
 	if err != nil {
 		return nil, err
@@ -126,13 +137,16 @@ func (c *ContainerIO) Config() cio.Config {
 
 // Pipe creates container fifos and pipe container output
 // to output stream.
+// Pipe创建容器的fifos，并且将容器的output进行pipe
 func (c *ContainerIO) Pipe() {
 	wg := c.closer.wg
 	wg.Add(1)
 	go func() {
+		// 从stdout这个pipe中，拷贝到stdoutGroup中
 		if _, err := io.Copy(c.stdoutGroup, c.stdout); err != nil {
 			glog.Errorf("Failed to pipe stdout of container %q: %v", c.id, err)
 		}
+		// 关闭stdout这个pipe
 		c.stdout.Close()
 		c.stdoutGroup.Close()
 		wg.Done()
@@ -145,6 +159,7 @@ func (c *ContainerIO) Pipe() {
 			if _, err := io.Copy(c.stderrGroup, c.stderr); err != nil {
 				glog.Errorf("Failed to pipe stderr of container %q: %v", c.id, err)
 			}
+			// 关闭stderr这个pipe
 			c.stderr.Close()
 			c.stderrGroup.Close()
 			wg.Done()
@@ -231,11 +246,13 @@ func (c *ContainerIO) Cancel() {
 }
 
 // Wait waits container io to finish.
+// Wait等待container io结束
 func (c *ContainerIO) Wait() {
 	c.closer.Wait()
 }
 
 // Close closes all FIFOs.
+// Close关闭各个closer，并且移除fifo文件
 func (c *ContainerIO) Close() error {
 	c.closer.Close()
 	if c.fifos != nil {

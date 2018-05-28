@@ -65,6 +65,7 @@ const (
 	// defaultShmSize is the default size of the sandbox shm.
 	defaultShmSize = int64(1024 * 1024 * 64)
 	// relativeRootfsPath is the rootfs path relative to bundle path.
+	// relativeRootfsPath是和bundle path相对的rootfs路径
 	relativeRootfsPath = "rootfs"
 	// sandboxesDir contains all sandbox root. A sandbox root is the running
 	// directory of the sandbox, all files created for the sandbox will be
@@ -134,15 +135,19 @@ func makeContainerName(c *runtime.ContainerMetadata, s *runtime.PodSandboxMetada
 func getCgroupsPath(cgroupsParent, id string, systemdCgroup bool) string {
 	if systemdCgroup {
 		// Convert a.slice/b.slice/c.slice to c.slice.
+		// 如果配置了systemd cgroup，将"a.slice/b.slice/c.slice"设置为c.slice
 		p := path.Base(cgroupsParent)
 		// runc systemd cgroup path format is "slice:prefix:name".
+		// runc的systemd cgroup path格式为"slice:prefix:name"
 		return strings.Join([]string{p, "cri-containerd", id}, ":")
 	}
+	// 非systemd cgroup，将cgroupsParent设置为"cgroupsParent/id"
 	return filepath.Join(cgroupsParent, id)
 }
 
 // getSandboxRootDir returns the root directory for managing sandbox files,
 // e.g. named pipes.
+// getSandboxRootDir返回用于管理sandbox files的根目录
 func getSandboxRootDir(rootDir, id string) string {
 	return filepath.Join(rootDir, sandboxesDir, id)
 }
@@ -204,18 +209,23 @@ func getRepoDigestAndTag(namedRef reference.Named, digest imagedigest.Digest, sc
 
 // localResolve resolves image reference locally and returns corresponding image metadata. It returns
 // nil without error if the reference doesn't exist.
+// localResolve本地对image reference进行解析并且返回相应的image metadata
+// 如果reference不存在的话，则返回nil并且没有error
 func (c *criContainerdService) localResolve(ctx context.Context, refOrID string) (*imagestore.Image, error) {
 	getImageID := func(refOrId string) string {
+		// 如果refOrId为ID，则直接返回
 		if _, err := imagedigest.Parse(refOrID); err == nil {
 			return refOrID
 		}
 
 		return func(ref string) string {
 			// ref is not image id, try to resolve it locally.
+			// 否则ref不是image id，直接在本地对其进行解析
 			normalized, err := util.NormalizeImageRef(ref)
 			if err != nil {
 				return ""
 			}
+			// 调用containerd client获取image信息
 			image, err := c.client.GetImage(ctx, normalized.String())
 			if err != nil {
 				return ""
@@ -231,6 +241,7 @@ func (c *criContainerdService) localResolve(ctx context.Context, refOrID string)
 	imageID := getImageID(refOrID)
 	if imageID == "" {
 		// Try to treat ref as imageID
+		// 如果调用getImageID得不到结果，就将ref作为imageID
 		imageID = refOrID
 	}
 	image, err := c.imageStore.Get(imageID)
@@ -288,6 +299,7 @@ func (c *criContainerdService) ensureImageExists(ctx context.Context, ref string
 
 // loadCgroup loads the cgroup associated with path if it exists and moves the current process into the cgroup. If the cgroup
 // is not created it is created and returned.
+// loadCgroup加载和cgroupPath相关的cgroup并将当前进程移入其中
 func loadCgroup(cgroupPath string) (cgroups.Cgroup, error) {
 	cg, err := cgroups.Load(cgroups.V1, cgroups.StaticPath(cgroupPath))
 	if err != nil {
@@ -307,6 +319,7 @@ func loadCgroup(cgroupPath string) (cgroups.Cgroup, error) {
 }
 
 // imageInfo is the information about the image got from containerd.
+// imageInfo是从containerd获取的镜像信息
 type imageInfo struct {
 	id        string
 	chainID   imagedigest.Digest
@@ -334,6 +347,7 @@ func getImageInfo(ctx context.Context, image containerd.Image) (*imageInfo, erro
 	}
 	id := desc.Digest.String()
 
+	// 从content store中读取镜像配置
 	rb, err := content.ReadBlob(ctx, image.ContentStore(), desc.Digest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read image config from content store: %v", err)

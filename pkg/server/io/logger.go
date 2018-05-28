@@ -47,13 +47,17 @@ const (
 
 // NewDiscardLogger creates logger which discards all the input.
 func NewDiscardLogger() io.WriteCloser {
+	// 对ioutil.Discard这一Writer做封装，增加一个Close接口
 	return cioutil.NewNopWriteCloser(ioutil.Discard)
 }
 
 // NewCRILogger returns a write closer which redirect container log into
 // log file, and decorate the log line into CRI defined format.
+// NewCRILogger返回一个write closer，它会将container log重定向到log file中
+// 并且将它修饰成CRI定义的形式
 func NewCRILogger(path string, stream StreamType) (io.WriteCloser, error) {
 	glog.V(4).Infof("Start writing log file %q", path)
+	// 创建一个pipe，返回其中的pipe writer
 	prc, pwc := io.Pipe()
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0640)
 	if err != nil {
@@ -74,6 +78,7 @@ func redirectLogs(path string, rc io.ReadCloser, wc io.WriteCloser, stream Strea
 	for {
 		lineBytes, isPrefix, err := r.ReadLine()
 		if err == io.EOF {
+			// 重定向结束
 			glog.V(4).Infof("Finish redirecting log file %q", path)
 			return
 		}

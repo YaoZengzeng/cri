@@ -35,6 +35,8 @@ var leakCheckWg *sync.WaitGroup
 // - syscall.O_NONBLOCK - return io.ReadWriteCloser even if other side of the
 //     fifo isn't open. read/write will be connected after the actual fifo is
 //     open or after fifo is closed.
+// - syscall.O_NONBLOCK - 返回io.ReadWriteCloser，即使另一端的fifo没有打开
+// 当真正的fifo被打开或者fifo被关闭时，read/write会真正连接到一起
 func OpenFifo(ctx context.Context, fn string, flag int, perm os.FileMode) (io.ReadWriteCloser, error) {
 	if _, err := os.Stat(fn); err != nil {
 		if os.IsNotExist(err) && flag&syscall.O_CREAT != 0 {

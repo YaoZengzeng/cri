@@ -48,6 +48,7 @@ func (w *writeCloseInformer) Close() error {
 }
 
 // nopWriteCloser wraps passed in writer with a nop close function.
+// nopWriteCloser只是对一个writer进行了封装，增加了一个不做任何操作的close函数
 type nopWriteCloser struct {
 	w io.Writer
 }

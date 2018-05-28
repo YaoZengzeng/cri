@@ -30,10 +30,13 @@ import (
 // mutate the internal state are thread-safe.
 type Container struct {
 	// Metadata is the metadata of the container, it is **immutable** after created.
+	// Metadata是容器的元数据，这在创建之后是不能修改的
 	Metadata
 	// Status stores the status of the container.
+	// Status用来存储容器的status
 	Status StatusStorage
 	// Container is the containerd container client.
+	// Container是containerd container client
 	Container containerd.Container
 	// Container IO
 	IO *cio.ContainerIO

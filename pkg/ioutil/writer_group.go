@@ -24,6 +24,7 @@ import (
 
 // WriterGroup is a group of writers. Writer could be dynamically
 // added and removed.
+// WriterGroup是一个writers的集合，Writer可以被动态地加入，也可以被动态地移除
 type WriterGroup struct {
 	mu      sync.Mutex
 	writers map[string]io.WriteCloser
@@ -45,6 +46,7 @@ func (g *WriterGroup) Add(key string, w io.WriteCloser) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.closed {
+		// 当writer group关闭时，将writer加入group
 		return errors.New("wait group closed")
 	}
 	g.writers[key] = w

@@ -36,6 +36,8 @@ type Process interface {
 
 // ExitStatus encapsulates a process' exit status.
 // It is used by `Wait()` to return either a process exit code or an error
+// ExitStatus对进程的exit status进行了封装
+// 它会被`Wait()`使用，用于返回一个进程的exit code或者一个error
 type ExitStatus struct {
 	code     uint32
 	exitedAt time.Time
@@ -122,6 +124,7 @@ func (p *process) Wait(ctx context.Context) (<-chan ExitStatus, error) {
 	c := make(chan ExitStatus, 1)
 	go func() {
 		defer close(c)
+		// 等待process中的task结束
 		r, err := p.task.client.TaskService().Wait(ctx, &tasks.WaitRequest{
 			ContainerID: p.task.id,
 			ExecID:      p.id,

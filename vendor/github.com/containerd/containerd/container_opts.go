@@ -25,6 +25,7 @@ type UpdateContainerOpts func(ctx context.Context, client *Client, c *containers
 
 // WithRuntime allows a user to specify the runtime name and additional options that should
 // be used to create tasks for the container
+// WithRuntime允许用户指定runtime name以及在创建容器的task时需要用到的额外选项
 func WithRuntime(name string, options interface{}) NewContainerOpts {
 	return func(ctx context.Context, client *Client, c *containers.Container) error {
 		var (

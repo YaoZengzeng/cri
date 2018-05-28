@@ -56,17 +56,20 @@ func (c *criContainerdService) RunPodSandbox(ctx context.Context, r *runtime.Run
 	glog.V(4).Infof("Generated id %q for sandbox %q", id, name)
 	// Reserve the sandbox name to avoid concurrent `RunPodSandbox` request starting the
 	// same sandbox.
+	// 保留name和id之间的映射，从而避免并行的`RunPodSandbox`请求启动同样的sandbox
 	if err := c.sandboxNameIndex.Reserve(name, id); err != nil {
 		return nil, fmt.Errorf("failed to reserve sandbox name %q: %v", name, err)
 	}
 	defer func() {
 		// Release the name if the function returns with an error.
 		if retErr != nil {
+			// 如果函数返回错误，释放name和id间的映射
 			c.sandboxNameIndex.ReleaseByName(name)
 		}
 	}()
 
 	// Create initial internal sandbox object.
+	// 创建初始的内部sandbox对象
 	sandbox := sandboxstore.Sandbox{
 		Metadata: sandboxstore.Metadata{
 			ID:     id,
@@ -145,13 +148,16 @@ func (c *criContainerdService) RunPodSandbox(ctx context.Context, r *runtime.Run
 		specOpts = append(specOpts, seccompSpecOpts)
 	}
 
+	// 创建容器的labels
 	sandboxLabels := buildLabels(config.Labels, containerKindSandbox)
 
+	// containerd创建新容器的配置选项
 	opts := []containerd.NewContainerOpts{
 		containerd.WithSnapshotter(c.config.ContainerdConfig.Snapshotter),
 		customopts.WithNewSnapshot(id, image.Image),
 		containerd.WithSpec(spec, specOpts...),
 		containerd.WithContainerLabels(sandboxLabels),
+		// 将sandbox的数据作为extension添加
 		containerd.WithContainerExtension(sandboxMetadataExtension, &sandbox.Metadata),
 		containerd.WithRuntime(
 			c.config.ContainerdConfig.Runtime,
@@ -160,6 +166,7 @@ func (c *criContainerdService) RunPodSandbox(ctx context.Context, r *runtime.Run
 				RuntimeRoot:   c.config.ContainerdConfig.RuntimeRoot,
 				SystemdCgroup: c.config.SystemdCgroup})} // TODO (mikebrow): add CriuPath when we add support for pause
 
+	// 调用containerd client创建容器
 	container, err := c.client.NewContainer(ctx, id, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create containerd container: %v", err)
@@ -189,6 +196,7 @@ func (c *criContainerdService) RunPodSandbox(ctx context.Context, r *runtime.Run
 	}()
 
 	// Setup sandbox /dev/shm, /etc/hosts and /etc/resolv.conf.
+	// 在sandboxRootDir中创建/dev/shm, /etc/hosts以及/etc/resolv.conf文件
 	if err = c.setupSandboxFiles(sandboxRootDir, config); err != nil {
 		return nil, fmt.Errorf("failed to setup sandbox files: %v", err)
 	}
@@ -205,6 +213,7 @@ func (c *criContainerdService) RunPodSandbox(ctx context.Context, r *runtime.Run
 	glog.V(5).Infof("Create sandbox container (id=%q, name=%q).",
 		id, name)
 	// We don't need stdio for sandbox container.
+	// 对于sandbox container，我们不需要stdio，创建新的task
 	task, err := container.NewTask(ctx, containerdio.NullIO)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create containerd task: %v", err)
@@ -218,6 +227,7 @@ func (c *criContainerdService) RunPodSandbox(ctx context.Context, r *runtime.Run
 		}
 	}()
 
+	// 启动task
 	if err = task.Start(ctx); err != nil {
 		return nil, fmt.Errorf("failed to start sandbox container task %q: %v",
 			id, err)
@@ -225,6 +235,7 @@ func (c *criContainerdService) RunPodSandbox(ctx context.Context, r *runtime.Run
 
 	// Add sandbox into sandbox store.
 	sandbox.Container = container
+	// 将sandbox加入sandbox store
 	if err := c.sandboxStore.Add(sandbox); err != nil {
 		return nil, fmt.Errorf("failed to add sandbox %+v into store: %v", sandbox, err)
 	}
@@ -243,6 +254,7 @@ func (c *criContainerdService) generateSandboxContainerSpec(id string, config *r
 	g := generate.NewFromSpec(spec)
 
 	// Apply default config from image config.
+	// 从image config中加载默认配置
 	if err := addImageEnvs(&g, imageConfig.Env); err != nil {
 		return nil, err
 	}
@@ -262,6 +274,7 @@ func (c *criContainerdService) generateSandboxContainerSpec(id string, config *r
 	g.SetRootPath(relativeRootfsPath)
 
 	// Make root of sandbox container read-only.
+	// 将sandbox container的root设置为readonly
 	g.SetRootReadonly(true)
 
 	// Set hostname.
@@ -273,10 +286,12 @@ func (c *criContainerdService) generateSandboxContainerSpec(id string, config *r
 	if config.GetLinux().GetCgroupParent() != "" {
 		cgroupsPath := getCgroupsPath(config.GetLinux().GetCgroupParent(), id,
 			c.config.SystemdCgroup)
+		// 设置CgroupsPath
 		g.SetLinuxCgroupsPath(cgroupsPath)
 	}
 	// When cgroup parent is not set, containerd-shim will create container in a child cgroup
 	// of the cgroup itself is in.
+	// 当没有收到设置cgroup时，containerd-shim会在它自己所在的cgroup的child cgroup创建容器
 	// TODO(random-liu): [P2] Set default cgroup path if cgroup parent is not specified.
 
 	// Set namespace options.
@@ -317,6 +332,7 @@ func (c *criContainerdService) generateSandboxContainerSpec(id string, config *r
 
 	// Note: LinuxSandboxSecurityContext does not currently provide an apparmor profile
 
+	// 设置默认的CPU shares以及OOM Score Adj
 	g.SetLinuxResourcesCPUShares(uint64(defaultSandboxCPUshares))
 	g.SetProcessOOMScoreAdj(int(defaultSandboxOOMAdj))
 

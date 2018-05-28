@@ -42,6 +42,9 @@ import (
 //   b. Cache constant and useful information such as image chainID, config etc.
 //   c. An image will be added into the in-memory metadata only when it's successfully
 //   pulled and unpacked.
+//	 ImageID -> RepoTags，ImageID -> RepoDigest的映射，ImageID是image config的digest，符合oci image spec
+//	 缓存常数以及有用的信息，例如image chainID，config等等
+//	 image只有在它被成功pull以及unpack之后，才会加入in-memroy metadata
 //
 // 2) We use containerd image metadata store and content store:
 //   a. To resolve image reference (digest/tag) locally. During pulling image, we
@@ -52,6 +55,9 @@ import (
 //   to get the image id.
 //   b. As the backup of in-memory metadata in 1). During startup, the in-memory
 //   metadata could be re-constructed from image metadata store + content store.
+//	 我们在本地解析image reference (digest/tag)，在拉取镜像的时候，我们normalize用户提供的image reference
+//	 并且将它们加入image metadata，对于其他操作，如果提供了image id，我们直接从内存中获取元数据
+//	 如果提供的是image reference，我们将normalize，然后从containerd image metadata store中获取image id
 //
 // Several problems with current approach:
 // 1) An entry in containerd image metadata store doesn't mean a "READY" (successfully
@@ -75,6 +81,8 @@ import (
 // 4) Is the content important if we cached necessary information in-memory
 // after we pull the image? How to manage the disk usage of contents? If some
 // contents are missing but snapshots are ready, is the image still "READY"?
+// 如果我们在内存中缓存了必要的信息，那么content还重要么？如果contents不见了，但是snapshots还是处于ready状态
+// 那么image还是"READY"的么？
 
 // PullImage pulls an image with authentication config.
 func (c *criContainerdService) PullImage(ctx context.Context, r *runtime.PullImageRequest) (*runtime.PullImageResponse, error) {
@@ -89,6 +97,7 @@ func (c *criContainerdService) PullImage(ctx context.Context, r *runtime.PullIma
 		glog.V(4).Infof("PullImage using normalized image ref: %q", ref)
 	}
 
+	// NewResolver返回一个新的Docker Registry的Resolver
 	resolver := docker.NewResolver(docker.ResolverOptions{
 		Credentials: func(string) (string, string, error) { return ParseAuth(r.GetAuth()) },
 		Client:      http.DefaultClient,
@@ -102,6 +111,7 @@ func (c *criContainerdService) PullImage(ctx context.Context, r *runtime.PullIma
 	isSchema1 := desc.MediaType == containerdimages.MediaTypeDockerSchema1Manifest
 
 	// TODO(mikebrow): add truncIndex for image id
+	// 调用containerd client，拉取image
 	image, err := c.client.Pull(ctx, ref,
 		containerd.WithSchema1Conversion,
 		containerd.WithResolver(resolver),
@@ -118,6 +128,7 @@ func (c *criContainerdService) PullImage(ctx context.Context, r *runtime.PullIma
 	}
 
 	// Get image information.
+	// 获取镜像信息
 	info, err := getImageInfo(ctx, image)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get image information: %v", err)
@@ -159,6 +170,8 @@ func (c *criContainerdService) PullImage(ctx context.Context, r *runtime.PullIma
 	// by someone else anytime, before/during/after we create the metadata. We should always
 	// check the actual state in containerd before using the image or returning status of the
 	// image.
+	// containerd中的状态才是sourth of truth
+	// 我们在使用image或者返回镜像的状态以前都要检测containerd中的真实状态
 	return &runtime.PullImageResponse{ImageRef: img.ID}, nil
 }
 

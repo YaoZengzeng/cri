@@ -71,10 +71,13 @@ type execOptions struct {
 
 // execInContainer executes a command inside the container synchronously, and
 // redirects stdio stream properly.
+// execInContainer同步地在一个容器内执行一条命令，并且将stdio流进行重定向
 func (c *criContainerdService) execInContainer(ctx context.Context, id string, opts execOptions) (*uint32, error) {
 	// Cancel the context before returning to ensure goroutines are stopped.
 	// This is important, because if `Start` returns error, `Wait` will hang
 	// forever unless we cancel the context.
+	// Cancel the context确保goroutines都停止了
+	// 这很重要，因为如果`Start`返回了error，`Wait`会一直等待，除非我们cancel the context
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -109,6 +112,7 @@ func (c *criContainerdService) execInContainer(ctx context.Context, id string, o
 	pspec.Terminal = opts.tty
 
 	if opts.stdout == nil {
+		// 如果opts.stdout为nil，设置为cio.NewDiscardLogger()
 		opts.stdout = cio.NewDiscardLogger()
 	}
 	if opts.stderr == nil {
@@ -186,6 +190,7 @@ func (c *criContainerdService) execInContainer(ctx context.Context, id string, o
 		if err != nil {
 			return nil, fmt.Errorf("failed while waiting for exec %q: %v", execID, err)
 		}
+		// 要等到attach结束才能返回
 		<-attachDone
 		glog.V(4).Infof("Stream pipe for exec process %q done", execID)
 		return &code, nil
